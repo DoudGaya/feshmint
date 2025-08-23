@@ -1,0 +1,300 @@
+// Fresh Mint Trading Bot - Prisma Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Authentication & Users
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          UserRole  @default(TRADER)
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret String?
+  accounts      Account[]
+  sessions      Session[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Trading specific
+  tradingSettings TradingSettings?
+  portfolios      Portfolio[]
+  trades          Trade[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  TRADER
+  VIEWER
+}
+
+enum TradingMode {
+  LIVE
+  PAPER
+}
+
+enum TradeStatus {
+  PENDING
+  EXECUTED
+  FAILED
+  CANCELLED
+}
+
+enum TradeType {
+  BUY
+  SELL
+}
+
+enum SignalSource {
+  TELEGRAM
+  DISCORD
+  SOLANA_INDEXER
+  MANUAL
+}
+
+enum MarketRegime {
+  GREENLIGHT
+  RISK_OFF
+  MAINTENANCE
+}
+
+// Trading Configuration
+model TradingSettings {
+  id                    String      @id @default(cuid())
+  userId                String      @unique
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  tradingMode           TradingMode @default(PAPER)
+  maxPositionSize       Float       @default(500)
+  portfolioCap          Float       @default(5000)
+  dailyDrawdownLimit    Float       @default(0.15)
+  winRateThreshold      Float       @default(0.30)
+  minLiquidity          Float       @default(20000)
+  minBuyerConfirmation  Int         @default(10)
+  maxDevWalletControl   Float       @default(0.30)
+  maxPriceDump          Float       @default(0.20)
+  trailingStopLoss      Float       @default(0.10)
+  
+  isActive              Boolean     @default(true)
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+}
+
+// Portfolio Management
+model Portfolio {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  startingEquity    Float    @default(5000)
+  currentEquity     Float    @default(5000)
+  totalPnl          Float    @default(0)
+  dailyPnl          Float    @default(0)
+  totalTrades       Int      @default(0)
+  winningTrades     Int      @default(0)
+  losingTrades      Int      @default(0)
+  winRate           Float    @default(0)
+  
+  tradingMode       TradingMode
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  trades            Trade[]
+  positions         Position[]
+}
+
+// Trading Signals
+model Signal {
+  id              String        @id @default(cuid())
+  source          SignalSource
+  sourceId        String?       // Telegram message ID, Discord message ID, etc.
+  
+  tokenAddress    String
+  tokenSymbol     String?
+  tokenName       String?
+  
+  rawMessage      String?       @db.Text
+  confidence      Float         @default(0)
+  score           Float         @default(0)
+  
+  liquidity       Float?
+  buyerCount      Int?
+  devWalletShare  Float?
+  priceChange     Float?
+  
+  isProcessed     Boolean       @default(false)
+  passedFilters   Boolean       @default(false)
+  filtersResult   Json?
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  trades          Trade[]
+}
+
+// Trades
+model Trade {
+  id                String      @id @default(cuid())
+  userId            String
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  portfolioId       String
+  portfolio         Portfolio   @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  signalId          String?
+  signal            Signal?     @relation(fields: [signalId], references: [id])
+  
+  type              TradeType
+  status            TradeStatus @default(PENDING)
+  
+  tokenAddress      String
+  tokenSymbol       String?
+  tokenName         String?
+  
+  amount            Float
+  price             Float?
+  estimatedPrice    Float?
+  slippage          Float?
+  fees              Float       @default(0)
+  
+  txHash            String?
+  blockNumber       Int?
+  executedAt        DateTime?
+  
+  pnl               Float       @default(0)
+  pnlPercentage     Float       @default(0)
+  
+  tradingMode       TradingMode
+  
+  // MEV Protection
+  jitoTip           Float?
+  priorityFee       Float?
+  
+  errorMessage      String?
+  metadata          Json?
+  
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+// Positions (for tracking current holdings)
+model Position {
+  id                String    @id @default(cuid())
+  portfolioId       String
+  portfolio         Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  
+  tokenAddress      String
+  tokenSymbol       String?
+  tokenName         String?
+  
+  amount            Float
+  averagePrice      Float
+  currentPrice      Float?
+  
+  unrealizedPnl     Float     @default(0)
+  realizedPnl       Float     @default(0)
+  
+  stopLossPrice     Float?
+  takeProfitPrice   Float?
+  
+  tradingMode       TradingMode
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  @@unique([portfolioId, tokenAddress, tradingMode])
+}
+
+// Market Data
+model MarketData {
+  id                String        @id @default(cuid())
+  
+  solanaVolume      Float?
+  solanaTokenCount  Int?
+  avgWinRate        Float?
+  mevCompetition    Float?
+  currentRegime     MarketRegime  @default(RISK_OFF)
+  
+  createdAt         DateTime      @default(now())
+}
+
+// Risk Management
+model RiskMetrics {
+  id                    String   @id @default(cuid())
+  
+  date                  DateTime @default(now())
+  totalTrades           Int      @default(0)
+  failedTrades          Int      @default(0)
+  successRate           Float    @default(0)
+  dailyPnl              Float    @default(0)
+  drawdown              Float    @default(0)
+  portfolioValue        Float    @default(0)
+  
+  isGreenlight          Boolean  @default(false)
+  riskLevel            String   @default("LOW") // LOW, MEDIUM, HIGH
+  
+  createdAt             DateTime @default(now())
+}
+
+// System Logs
+model SystemLog {
+  id          String   @id @default(cuid())
+  level       String   // INFO, WARN, ERROR, DEBUG
+  module      String   // SIGNAL, TRADE, RISK, AUTH, etc.
+  message     String   @db.Text
+  metadata    Json?
+  createdAt   DateTime @default(now())
+}
+
+// Blacklisted addresses/contracts
+model Blacklist {
+  id          String   @id @default(cuid())
+  address     String   @unique
+  reason      String
+  addedBy     String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
