@@ -74,14 +74,46 @@ export default function DashboardPage() {
     try {
       const response = await fetch('/api/dashboard');
       if (!response.ok) {
-        throw new Error('Failed to fetch dashboard data');
+        const errorData = await response.json().catch(() => ({}));
+        
+        if (response.status === 503 && errorData.type === 'CONNECTION_ERROR') {
+          setError('Database connection issue. Using demo data.');
+          // Set fallback/demo data
+          setData({
+            portfolio: {
+              totalValue: 0,
+              dailyPnl: 0,
+              totalPnl: 0,
+              winRate: 0,
+            },
+            recentTrades: [],
+            activePositions: [],
+            recentSignals: [],
+          });
+          return;
+        }
+        
+        throw new Error(errorData.message || 'Failed to fetch dashboard data');
       }
       const dashboardData = await response.json();
       setData(dashboardData);
       setError(null);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
-      setError('Failed to load dashboard data');
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
+      
+      // Set fallback data when there's an error
+      setData({
+        portfolio: {
+          totalValue: 0,
+          dailyPnl: 0,
+          totalPnl: 0,
+          winRate: 0,
+        },
+        recentTrades: [],
+        activePositions: [],
+        recentSignals: [],
+      });
     } finally {
       setLoading(false);
     }

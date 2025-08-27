@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { prisma, executeWithRetry } from '@/lib/prisma';
 
 export async function GET() {
   try {
@@ -14,38 +14,61 @@ export async function GET() {
       );
     }
 
-    // Get user's portfolio data
-    const portfolio = await prisma.portfolio.findFirst({
-      where: { 
-        userId: session.user.id,
-        isActive: true 
-      },
-    });
+    // Test database connection first
+    try {
+      await prisma.$connect();
+    } catch (connectionError) {
+      console.error('Database connection failed:', connectionError);
+      return NextResponse.json(
+        { 
+          error: 'Database connection failed',
+          message: 'Unable to connect to database. Please check your DATABASE_URL configuration.',
+          details: process.env.NODE_ENV === 'development' ? connectionError : undefined
+        },
+        { status: 503 }
+      );
+    }
 
-    // Get recent trades
-    const recentTrades = await prisma.trade.findMany({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-      include: {
-        signal: true,
-      },
-    });
-
-    // Get current positions
-    const positions = await prisma.position.findMany({
-      where: { 
-        portfolio: {
+    // Get user's portfolio data with retry logic
+    const portfolio = await executeWithRetry(() =>
+      prisma.portfolio.findFirst({
+        where: { 
           userId: session.user.id,
-          isActive: true
-        }
-      },
-    });
+          isActive: true 
+        },
+      })
+    );
 
-    // Get trading settings (currently unused but may be needed for future features)
-    const _tradingSettings = await prisma.tradingSettings.findUnique({
-      where: { userId: session.user.id },
-    });
+    // Get recent trades with retry logic
+    const recentTrades = await executeWithRetry(() =>
+      prisma.trade.findMany({
+        where: { userId: session.user.id },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        include: {
+          signal: true,
+        },
+      })
+    );
+
+    // Get current positions with retry logic
+    const positions = await executeWithRetry(() =>
+      prisma.position.findMany({
+        where: { 
+          portfolio: {
+            userId: session.user.id,
+            isActive: true
+          }
+        },
+      })
+    );
+
+    // Get trading settings with retry logic (currently unused but may be needed for future features)
+    const _tradingSettings = await executeWithRetry(() =>
+      prisma.tradingSettings.findUnique({
+        where: { userId: session.user.id },
+      })
+    );
 
     // Calculate statistics
     const totalTrades = recentTrades.length;
@@ -53,12 +76,14 @@ export async function GET() {
     const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
     const totalPnl = recentTrades.reduce((sum, trade) => sum + trade.pnl, 0);
 
-    // Get recent signals
-    const recentSignals = await prisma.signal.findMany({
-      where: { isProcessed: true },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-    });
+    // Get recent signals with retry logic
+    const recentSignals = await executeWithRetry(() =>
+      prisma.signal.findMany({
+        where: { isProcessed: true },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      })
+    );
 
     const dashboardData = {
       portfolio: {
@@ -112,9 +137,31 @@ export async function GET() {
     return NextResponse.json(dashboardData);
   } catch (error) {
     console.error('Dashboard API error:', error);
+    
+    // Check if it's a database connection error
+    if (error && typeof error === 'object' && 'code' in error) {
+      const prismaError = error as { code?: string; message?: string };
+      if (prismaError.code === 'P1001' || prismaError.message?.includes("Can't reach database server")) {
+        return NextResponse.json(
+          { 
+            error: 'Database connection failed',
+            message: 'Unable to connect to the database. Please check your database configuration.',
+            type: 'CONNECTION_ERROR'
+          },
+          { status: 503 }
+        );
+      }
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to fetch dashboard data' },
+      { 
+        error: 'Failed to fetch dashboard data',
+        message: error instanceof Error ? error.message : 'Unknown error occurred',
+        type: 'INTERNAL_ERROR'
+      },
       { status: 500 }
     );
+  } finally {
+    await prisma.$disconnect();
   }
 }
