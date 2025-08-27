@@ -46,6 +46,14 @@ model User {
   role          UserRole  @default(TRADER)
   twoFactorEnabled Boolean @default(false)
   twoFactorSecret String?
+  
+  // Subscription & Billing
+  subscriptionTier    SubscriptionTier @default(FREE)
+  subscriptionStatus  String?          // active, canceled, past_due
+  stripeCustomerId    String?
+  stripeSubscriptionId String?
+  subscriptionEndsAt  DateTime?
+  
   accounts      Account[]
   sessions      Session[]
   createdAt     DateTime  @default(now())
@@ -53,8 +61,10 @@ model User {
   
   // Trading specific
   tradingSettings TradingSettings?
+  userSettings    UserSettings?
   portfolios      Portfolio[]
   trades          Trade[]
+  strategies      Strategy[]
 }
 
 model VerificationToken {
@@ -65,11 +75,96 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// User Settings & API Keys (Encrypted)
+model UserSettings {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Encrypted API keys and sensitive data
+  solanaRpcUrl          String?  // Encrypted
+  jitoApiKey            String?  // Encrypted  
+  tradingWalletPrivateKey String? // Encrypted
+  telegramBotToken      String?  // Encrypted
+  discordWebhookUrl     String?  // Encrypted
+  
+  // Notification preferences
+  emailNotifications    Boolean  @default(true)
+  telegramNotifications Boolean  @default(false)
+  discordNotifications  Boolean  @default(false)
+  
+  // UI Preferences
+  dashboardTheme        String   @default("dark")
+  timezone              String   @default("UTC")
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+// Custom Trading Strategies
+model Strategy {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name            String
+  description     String?         @db.Text
+  status          StrategyStatus  @default(DRAFT)
+  
+  // Strategy configuration (JSON)
+  config          Json
+  
+  // Performance metrics
+  totalTrades     Int             @default(0)
+  winRate         Float           @default(0)
+  totalPnl        Float           @default(0)
+  
+  isActive        Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  backtests       Backtest[]
+  trades          Trade[]
+}
+
+// Strategy Backtesting
+model Backtest {
+  id              String    @id @default(cuid())
+  strategyId      String
+  strategy        Strategy  @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  
+  name            String
+  startDate       DateTime
+  endDate         DateTime
+  
+  // Results
+  totalTrades     Int       @default(0)
+  winningTrades   Int       @default(0)
+  losingTrades    Int       @default(0)
+  winRate         Float     @default(0)
+  totalPnl        Float     @default(0)
+  maxDrawdown     Float     @default(0)
+  sharpeRatio     Float?
+  
+  // Configuration used
+  config          Json
+  
+  isCompleted     Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
 // Enums
 enum UserRole {
   ADMIN
   TRADER
   VIEWER
+}
+
+enum SubscriptionTier {
+  FREE
+  PRO
+  ENTERPRISE
 }
 
 enum TradingMode {
@@ -100,6 +195,12 @@ enum MarketRegime {
   GREENLIGHT
   RISK_OFF
   MAINTENANCE
+}
+
+enum StrategyStatus {
+  ACTIVE
+  PAUSED
+  DRAFT
 }
 
 // Trading Configuration
@@ -186,6 +287,8 @@ model Trade {
   portfolio         Portfolio   @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   signalId          String?
   signal            Signal?     @relation(fields: [signalId], references: [id])
+  strategyId        String?
+  strategy          Strategy?   @relation(fields: [strategyId], references: [id])
   
   type              TradeType
   status            TradeStatus @default(PENDING)

@@ -121,7 +121,7 @@ export default function SignIn() {
               className="group relative w-full flex justify-center items-center py-3 px-4 text-sm font-bold text-white bg-gradient-to-r from-green-500 to-blue-600 rounded-xl hover:from-green-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-green-400/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-[1.02] shadow-lg hover:shadow-xl"
             >
               <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-green-400 to-blue-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition-opacity"></span>
-              <span className="relative">
+              <span className="relative flex flex-row space-x-3">
                 {isLoading ? (
                   <>
                     <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -131,7 +131,7 @@ export default function SignIn() {
                     Signing in...
                   </>
                 ) : (
-                  "Sign In"
+                  <p>Sign In</p>
                 )}
               </span>
             </button>
