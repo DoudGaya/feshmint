@@ -1,0 +1,12 @@
+{
+  "framework": "nextjs",
+  "installCommand": "npm install",
+  "env": {
+    "PRISMA_GENERATE_DATAPROXY": "true"
+  },
+  "functions": {
+    "app/api/**/*.ts": {
+      "maxDuration": 30
+    }
+  }
+}

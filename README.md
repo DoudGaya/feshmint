@@ -133,7 +133,37 @@ The application is designed for deployment on Vercel:
 npm run build
 ```
 
-## 📋 Project Status
+## � Deployment
+
+### Vercel Deployment
+
+The application is optimized for Vercel deployment:
+
+1. **Environment Variables**: Set up all required environment variables in Vercel dashboard
+2. **Database**: Use NeonDB or another PostgreSQL provider
+3. **Build Configuration**: The build process automatically runs `prisma generate`
+
+#### Required Environment Variables for Production:
+- `DATABASE_URL` - PostgreSQL connection string
+- `NEXTAUTH_SECRET` - Random secret for NextAuth
+- `NEXTAUTH_URL` - Your production domain
+- `ENCRYPTION_KEY` - 32-character string for API key encryption
+
+#### Deploy to Vercel:
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel --prod
+```
+
+#### Common Deployment Issues:
+- **Prisma Client Error**: Fixed by `postinstall` script that runs `prisma generate`
+- **Environment Variables**: Ensure all required vars are set in Vercel dashboard
+- **Database Connection**: Use connection pooling for serverless environments
+
+## �📋 Project Status
 
 ### ✅ Completed
 - [x] Next.js 15 project setup with TypeScript
