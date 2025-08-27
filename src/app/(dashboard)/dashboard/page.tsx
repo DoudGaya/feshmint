@@ -82,12 +82,19 @@ export default function DashboardPage() {
           setData({
             portfolio: {
               totalValue: 0,
-              dailyPnl: 0,
-              totalPnl: 0,
+              dailyChange: 0,
+              dailyChangePercent: 0,
+              totalProfit: 0,
+              totalProfitPercent: 0,
+            },
+            stats: {
+              activeTrades: 0,
+              signalsToday: 0,
               winRate: 0,
+              avgProfit: 0,
             },
             recentTrades: [],
-            activePositions: [],
+            positions: [],
             recentSignals: [],
           });
           return;
@@ -106,12 +113,19 @@ export default function DashboardPage() {
       setData({
         portfolio: {
           totalValue: 0,
-          dailyPnl: 0,
-          totalPnl: 0,
+          dailyChange: 0,
+          dailyChangePercent: 0,
+          totalProfit: 0,
+          totalProfitPercent: 0,
+        },
+        stats: {
+          activeTrades: 0,
+          signalsToday: 0,
           winRate: 0,
+          avgProfit: 0,
         },
         recentTrades: [],
-        activePositions: [],
+        positions: [],
         recentSignals: [],
       });
     } finally {
