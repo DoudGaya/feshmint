@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { prisma, executeWithRetry, connectWithRetry } from '@/lib/prisma';
 
 export async function GET() {
   try {
+    await connectWithRetry();
     const session = await getServerSession(authOptions);
     
     if (!session?.user?.id) {
@@ -15,27 +16,31 @@ export async function GET() {
     }
 
     // Get or create trading settings for the user
-    let tradingSettings = await prisma.tradingSettings.findUnique({
-      where: { userId: session.user.id },
+    let tradingSettings = await executeWithRetry(async () => {
+      return await prisma.tradingSettings.findUnique({
+        where: { userId: session.user.id },
+      });
     });
 
     if (!tradingSettings) {
       // Create default trading settings
-      tradingSettings = await prisma.tradingSettings.create({
-        data: {
-          userId: session.user.id,
-          tradingMode: 'PAPER',
-          maxPositionSize: 500,
-          portfolioCap: 5000,
-          dailyDrawdownLimit: 0.15,
-          winRateThreshold: 0.30,
-          minLiquidity: 20000,
-          minBuyerConfirmation: 10,
-          maxDevWalletControl: 0.30,
-          maxPriceDump: 0.20,
-          trailingStopLoss: 0.10,
-          isActive: false,
-        },
+      tradingSettings = await executeWithRetry(async () => {
+        return await prisma.tradingSettings.create({
+          data: {
+            userId: session.user.id,
+            tradingMode: 'PAPER',
+            maxPositionSize: 500,
+            portfolioCap: 5000,
+            dailyDrawdownLimit: 0.15,
+            winRateThreshold: 0.30,
+            minLiquidity: 20000,
+            minBuyerConfirmation: 10,
+            maxDevWalletControl: 0.30,
+            maxPriceDump: 0.20,
+            trailingStopLoss: 0.10,
+            isActive: false,
+          },
+        });
       });
     }
 
@@ -54,10 +59,21 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Trading settings API error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch trading settings' },
-      { status: 500 }
-    );
+    
+    // Return default settings if database is unavailable
+    return NextResponse.json({
+      isActive: false,
+      tradingMode: 'PAPER',
+      maxPositionSize: 500,
+      portfolioCap: 5000,
+      dailyDrawdownLimit: 0.15,
+      winRateThreshold: 0.30,
+      minLiquidity: 20000,
+      minBuyerConfirmation: 10,
+      maxDevWalletControl: 0.30,
+      maxPriceDump: 0.20,
+      trailingStopLoss: 0.10,
+    });
   }
 }
 

@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { prisma, executeWithRetry, connectWithRetry } from '@/lib/prisma';
 import { EncryptionService } from '@/lib/encryption';
 import { z } from 'zod';
 
 // Validation schema for user settings
 const userSettingsSchema = z.object({
   solanaRpcUrl: z.string().url().optional().or(z.literal('')),
-  jitoApiKey: z.string().optional().or(z.literal('')),
+  // jitoApiKey removed per policy
   tradingWalletPrivateKey: z.string().optional().or(z.literal('')),
   telegramBotToken: z.string().optional().or(z.literal('')),
   discordWebhookUrl: z.string().url().optional().or(z.literal('')),
@@ -21,6 +21,7 @@ const userSettingsSchema = z.object({
 
 export async function GET() {
   try {
+    await connectWithRetry();
     const session = await getServerSession(authOptions);
     
     if (!session?.user?.id) {
@@ -30,8 +31,10 @@ export async function GET() {
       );
     }
 
-    const settings = await prisma.userSettings.findUnique({
-      where: { userId: session.user.id },
+    const settings = await executeWithRetry(async () => {
+      return await prisma.userSettings.findUnique({
+        where: { userId: session.user.id },
+      });
     });
 
     // Return settings without encrypted values (for security)
@@ -43,7 +46,7 @@ export async function GET() {
       timezone: settings?.timezone ?? 'UTC',
       // Indicate if encrypted fields are set (without revealing values)
       hasSolanaRpcUrl: !!settings?.solanaRpcUrl,
-      hasJitoApiKey: !!settings?.jitoApiKey,
+  // jitoApiKey removed
       hasTradingWalletPrivateKey: !!settings?.tradingWalletPrivateKey,
       hasTelegramBotToken: !!settings?.telegramBotToken,
       hasDiscordWebhookUrl: !!settings?.discordWebhookUrl,
@@ -52,10 +55,19 @@ export async function GET() {
     return NextResponse.json(safeSettings);
   } catch (error) {
     console.error('Error fetching user settings:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    
+    // Return default settings if database is unavailable
+    return NextResponse.json({
+      emailNotifications: true,
+      telegramNotifications: false,
+      discordNotifications: false,
+      dashboardTheme: 'dark',
+      timezone: 'UTC',
+      hasSolanaRpcUrl: false,
+      hasTradingWalletPrivateKey: false,
+      hasTelegramBotToken: false,
+      hasDiscordWebhookUrl: false,
+    });
   }
 }
 
@@ -80,9 +92,7 @@ export async function POST(request: NextRequest) {
       encryptedData.solanaRpcUrl = EncryptionService.encrypt(validatedData.solanaRpcUrl);
     }
     
-    if (validatedData.jitoApiKey) {
-      encryptedData.jitoApiKey = EncryptionService.encrypt(validatedData.jitoApiKey);
-    }
+    // jitoApiKey removed
     
     if (validatedData.tradingWalletPrivateKey) {
       // Validate private key format before encrypting

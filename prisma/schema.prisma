@@ -83,7 +83,7 @@ model UserSettings {
   
   // Encrypted API keys and sensitive data
   solanaRpcUrl          String?  // Encrypted
-  jitoApiKey            String?  // Encrypted  
+  // jitoApiKey removed
   tradingWalletPrivateKey String? // Encrypted
   telegramBotToken      String?  // Encrypted
   discordWebhookUrl     String?  // Encrypted
@@ -313,7 +313,7 @@ model Trade {
   tradingMode       TradingMode
   
   // MEV Protection
-  jitoTip           Float?
+  // jitoTip removed
   priorityFee       Float?
   
   errorMessage      String?

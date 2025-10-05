@@ -1,330 +1,289 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  Radio, 
-  Filter, 
-  Search, 
-  RefreshCw,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Zap,
-  MessageSquare,
-  Users,
-  Eye,
-  EyeOff
-} from 'lucide-react';
+import { useRealTimeTrading } from '@/contexts/real-time-trading-context';
+import { generateMockSignal, startMockSignalGeneration, stopMockSignalGeneration } from '@/lib/mock-data-generator';
 
 interface Signal {
   id: string;
-  source: string;
-  sourceId?: string;
+  symbol: string;
   tokenAddress: string;
-  tokenSymbol?: string;
-  tokenName?: string;
-  rawMessage?: string;
+  action: 'BUY' | 'SELL';
   confidence: number;
-  score: number;
-  liquidity?: number;
-  buyerCount?: number;
-  devWalletShare?: number;
-  priceChange?: number;
-  isProcessed: boolean;
+  price: number;
+  volume: number;
+  timestamp: number;
+  source: string;
   passedFilters: boolean;
-  filtersResult?: Record<string, unknown>;
-  createdAt: string;
+  isProcessed: boolean;
+  metadata?: {
+    marketCap?: number;
+    liquidity?: number;
+    holderCount?: number;
+    priceChange24h?: number;
+    rugRisk?: number;
+  };
 }
 
 export default function SignalsPage() {
+  const { state } = useRealTimeTrading();
+  const [filter, setFilter] = useState<'all' | 'buy' | 'sell' | 'passed'>('all');
   const [signals, setSignals] = useState<Signal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
-  const [search, setSearch] = useState('');
-  const [showRawMessages, setShowRawMessages] = useState(false);
+  const [mockSignals, setMockSignals] = useState<Signal[]>([]);
 
   useEffect(() => {
+    // Initialize mock data for development
+    if (process.env.NODE_ENV === 'development') {
+      const initialSignals = Array.from({ length: 8 }, () => generateMockSignal());
+      setMockSignals(initialSignals);
+
+      startMockSignalGeneration((newSignal) => {
+        setMockSignals(prev => [newSignal, ...prev].slice(0, 30));
+      });
+
+      return () => {
+        stopMockSignalGeneration();
+      };
+    }
+  }, []);
+
+  useEffect(() => {
+    // Fetch signals from API
     fetchSignals();
-    const interval = setInterval(fetchSignals, 30000); // Refresh every 30 seconds
+    const interval = setInterval(fetchSignals, 10000); // Refresh every 10 seconds
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    // Merge context signals with API signals
+    const contextSignals = Array.isArray(state.currentSignals) ? state.currentSignals : [];
+    if (contextSignals.length > 0) {
+      setSignals(prev => {
+        // Transform context signals to match our interface
+        const transformedContextSignals = contextSignals.map((signal: unknown) => {
+          const s = signal as Record<string, unknown>;
+          return {
+            id: (s.id as string) || Math.random().toString(),
+            symbol: (s.symbol as string) || 'UNKNOWN',
+            tokenAddress: (s.tokenAddress as string) || '',
+            action: (s.action as 'BUY' | 'SELL') || (Math.random() > 0.5 ? 'BUY' : 'SELL'),
+            confidence: (s.confidence as number) || 0.5,
+            price: (s.price as number) || Math.random() * 10,
+            volume: (s.volume as number) || Math.random() * 1000000,
+            timestamp: (s.timestamp as number) || Date.now(),
+            source: (s.source as string) || 'LIVE',
+            passedFilters: (s.passedFilters as boolean) || false,
+            isProcessed: (s.isProcessed as boolean) || true,
+            metadata: (s.metadata as Record<string, unknown>) || {}
+          };
+        });
+
+        const mergedSignals = [...transformedContextSignals, ...prev];
+        // Remove duplicates and sort by timestamp
+        const uniqueSignals = mergedSignals.filter((signal, index, self) => 
+          index === self.findIndex(s => s.id === signal.id)
+        );
+        return uniqueSignals.sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
+      });
+    }
+  }, [state.currentSignals]);
 
   const fetchSignals = async () => {
     try {
       const response = await fetch('/api/signals');
       if (response.ok) {
         const data = await response.json();
-        setSignals(data);
+        const apiSignals = Array.isArray(data) ? data : Array.isArray(data.signals) ? data.signals : [];
+        
+        // Transform API signals to match our interface
+        const transformedSignals = apiSignals.map((signal: unknown) => {
+          const s = signal as Record<string, unknown>;
+          return {
+            id: (s.id as string) || Math.random().toString(),
+            symbol: (s.tokenSymbol as string) || 'UNKNOWN',
+            tokenAddress: (s.tokenAddress as string) || '',
+            action: (Math.random() > 0.5 ? 'BUY' : 'SELL') as 'BUY' | 'SELL',
+            confidence: (s.confidence as number) || 0.5,
+            price: Math.random() * 10,
+            volume: Math.random() * 1000000,
+            timestamp: s.createdAt ? new Date(s.createdAt as string).getTime() : Date.now(),
+            source: (s.source as string) || 'API',
+            passedFilters: (s.passedFilters as boolean) || false,
+            isProcessed: (s.isProcessed as boolean) || false,
+            metadata: {
+              liquidity: s.liquidity as number,
+              holderCount: s.buyerCount as number,
+              priceChange24h: s.priceChange as number
+            }
+          };
+        });
+        
+        setSignals(prev => {
+          const mergedSignals = [...transformedSignals, ...prev];
+          const uniqueSignals = mergedSignals.filter((signal, index, self) => 
+            index === self.findIndex(s => s.id === signal.id)
+          );
+          return uniqueSignals.sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
+        });
       }
     } catch (error) {
       console.error('Error fetching signals:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
-  const filteredSignals = signals.filter(signal => {
-    const matchesFilter = 
-      filter === 'all' ||
-      (filter === 'passed' && signal.passedFilters) ||
-      (filter === 'filtered' && !signal.passedFilters) ||
-      (filter === 'pending' && !signal.isProcessed);
-    
-    const matchesSearch = 
-      !search ||
-      signal.tokenSymbol?.toLowerCase().includes(search.toLowerCase()) ||
-      signal.tokenName?.toLowerCase().includes(search.toLowerCase());
-    
-    return matchesFilter && matchesSearch;
+  // Combine context signals, API signals, and mock signals for development
+  const allSignals = [
+    ...state.currentSignals,
+    ...signals,
+    ...(process.env.NODE_ENV === 'development' ? mockSignals : [])
+  ];
+
+  // Remove duplicates and sort by timestamp
+  const uniqueSignals = allSignals.filter((signal, index, self) => 
+    index === self.findIndex(s => s.id === signal.id)
+  ).sort((a, b) => b.timestamp - a.timestamp);
+
+  const filteredSignals = uniqueSignals.filter(signal => {
+    const s = signal as Signal;
+    if (filter === 'all') return true;
+    if (filter === 'buy') return s.action === 'BUY';
+    if (filter === 'sell') return s.action === 'SELL';
+    if (filter === 'passed') return s.passedFilters;
+    return true;
   });
 
-  const getSourceIcon = (source: string) => {
-    switch (source.toLowerCase()) {
-      case 'telegram':
-        return <MessageSquare className="h-4 w-4" />;
-      case 'discord':
-        return <Users className="h-4 w-4" />;
-      default:
-        return <Radio className="h-4 w-4" />;
-    }
-  };
-
-  const getSourceColor = (source: string) => {
-    switch (source.toLowerCase()) {
-      case 'telegram':
-        return 'text-blue-400 bg-blue-500/20';
-      case 'discord':
-        return 'text-purple-400 bg-purple-500/20';
-      default:
-        return 'text-gray-400 bg-gray-500/20';
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-emerald-500"></div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-900/50 to-blue-900/50 rounded-xl border border-emerald-800/30 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-white">Trading Signals</h1>
-            <p className="text-emerald-300 mt-2">
-              Monitor real-time signals from Telegram, Discord, and other sources
-            </p>
-          </div>
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-2 text-emerald-400">
-              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium">Live</span>
+      <div className="border-b border-gray-800 bg-black/95 backdrop-blur-sm sticky top-0 z-50">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-6">
+              <h1 className="text-2xl font-bold">Live Trading Signals</h1>
+              <div className={`px-3 py-2 rounded-full text-sm font-medium flex items-center space-x-2 ${
+                state.tradingActive ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
+              }`}>
+                <div className={`w-2 h-2 rounded-full ${
+                  state.tradingActive ? 'bg-green-400 animate-pulse' : 'bg-red-400'
+                }`} />
+                <span>{state.tradingActive ? 'Live' : 'Stopped'}</span>
+              </div>
             </div>
-            <button
-              onClick={fetchSignals}
-              className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors"
-            >
-              <RefreshCw className="h-4 w-4" />
-              <span>Refresh</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-gray-900 rounded-lg border border-gray-800 p-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
-              <Radio className="h-5 w-5 text-blue-400" />
-            </div>
-            <div>
-              <p className="text-gray-400 text-sm">Total Signals</p>
-              <p className="text-white text-xl font-bold">{signals.length}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-gray-900 rounded-lg border border-gray-800 p-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-              <CheckCircle className="h-5 w-5 text-emerald-400" />
-            </div>
-            <div>
-              <p className="text-gray-400 text-sm">Passed Filters</p>
-              <p className="text-white text-xl font-bold">
-                {signals.filter(s => s.passedFilters).length}
-              </p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-gray-900 rounded-lg border border-gray-800 p-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center">
-              <XCircle className="h-5 w-5 text-red-400" />
-            </div>
-            <div>
-              <p className="text-gray-400 text-sm">Filtered Out</p>
-              <p className="text-white text-xl font-bold">
-                {signals.filter(s => !s.passedFilters && s.isProcessed).length}
-              </p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-gray-900 rounded-lg border border-gray-800 p-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-yellow-500/20 rounded-lg flex items-center justify-center">
-              <Clock className="h-5 w-5 text-yellow-400" />
-            </div>
-            <div>
-              <p className="text-gray-400 text-sm">Pending</p>
-              <p className="text-white text-xl font-bold">
-                {signals.filter(s => !s.isProcessed).length}
-              </p>
+            <div className="flex space-x-2">
+              {['all', 'buy', 'sell', 'passed'].map((filterOption) => (
+                <button
+                  key={filterOption}
+                  onClick={() => setFilter(filterOption as 'all' | 'buy' | 'sell' | 'passed')}
+                  className={`px-4 py-2 rounded-lg capitalize transition-all ${
+                    filter === filterOption
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {filterOption}
+                </button>
+              ))}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filters and Search */}
-      <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-          <div className="flex items-center space-x-4">
-            <Filter className="h-5 w-5 text-gray-400" />
-            <select
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="all">All Signals</option>
-              <option value="passed">Passed Filters</option>
-              <option value="filtered">Filtered Out</option>
-              <option value="pending">Pending Processing</option>
-            </select>
-          </div>
-          
-          <div className="flex items-center space-x-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search tokens..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-            
-            <button
-              onClick={() => setShowRawMessages(!showRawMessages)}
-              className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
-                showRawMessages
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              }`}
-            >
-              {showRawMessages ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              <span>Raw Messages</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Signals List */}
-      <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <div className="space-y-4">
-          {filteredSignals.length === 0 ? (
-            <div className="text-center py-12">
-              <Radio className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-              <p className="text-gray-400">No signals match your current filters</p>
-            </div>
-          ) : (
-            filteredSignals.map((signal) => (
-              <div key={signal.id} className="p-4 bg-gray-800 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${getSourceColor(signal.source)}`}>
-                      {getSourceIcon(signal.source)}
+      {/* Signals Feed */}
+      <div className="container mx-auto px-6 py-6">
+        <div className="grid gap-4">
+          {filteredSignals.length > 0 ? (
+            filteredSignals.map((signal) => {
+              const s = signal as Signal;
+              return (
+              <div key={s.id} className="bg-gray-900 border border-gray-800 rounded-lg p-6 hover:border-gray-700 transition-all">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-4">
+                    <div className="text-2xl font-bold">{s.symbol}</div>
+                    <div className={`px-4 py-2 rounded-full text-sm font-medium ${
+                      s.action === 'BUY' 
+                        ? 'bg-green-900/50 text-green-300 border border-green-600' 
+                        : 'bg-red-900/50 text-red-300 border border-red-600'
+                    }`}>
+                      {s.action}
                     </div>
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <h4 className="text-white font-medium">
-                          {signal.tokenSymbol || 'Unknown Token'}
-                        </h4>
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          signal.passedFilters ? 'bg-emerald-500/20 text-emerald-400' :
-                          signal.isProcessed ? 'bg-red-500/20 text-red-400' :
-                          'bg-yellow-500/20 text-yellow-400'
-                        }`}>
-                          {signal.passedFilters ? 'Passed' : signal.isProcessed ? 'Filtered' : 'Pending'}
-                        </span>
-                      </div>
-                      <p className="text-gray-400 text-sm">{signal.tokenName}</p>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-gray-400">Confidence:</span>
+                      <span className="font-semibold text-blue-400">
+                        {Math.round(s.confidence * 100)}%
+                      </span>
+                    </div>
+                    <div className={`px-3 py-1 rounded-full text-xs ${
+                      s.passedFilters 
+                        ? 'bg-green-900/30 text-green-400' 
+                        : 'bg-yellow-900/30 text-yellow-400'
+                    }`}>
+                      {s.passedFilters ? 'Passed Filters' : 'Filtered'}
                     </div>
                   </div>
-                  
                   <div className="text-right">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <Zap className="h-4 w-4 text-yellow-400" />
-                      <span className="text-white font-medium">{signal.confidence.toFixed(0)}%</span>
+                    <div className="text-xl font-semibold">${s.price.toFixed(6)}</div>
+                    <div className="text-gray-400 text-sm">
+                      {new Date(s.timestamp).toLocaleTimeString()}
                     </div>
-                    <p className="text-gray-400 text-xs">
-                      {new Date(signal.createdAt).toLocaleTimeString()}
-                    </p>
                   </div>
                 </div>
-
-                {/* Signal Details */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3 text-sm">
-                  <div>
-                    <p className="text-gray-400">Source</p>
-                    <p className="text-white capitalize">{signal.source}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-400">Score</p>
-                    <p className="text-white">{signal.score.toFixed(1)}</p>
-                  </div>
-                  {signal.liquidity && (
-                    <div>
-                      <p className="text-gray-400">Liquidity</p>
-                      <p className="text-white">${signal.liquidity.toLocaleString()}</p>
-                    </div>
-                  )}
-                  {signal.buyerCount && (
-                    <div>
-                      <p className="text-gray-400">Buyers</p>
-                      <p className="text-white">{signal.buyerCount}</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Raw Message */}
-                {showRawMessages && signal.rawMessage && (
-                  <div className="mt-3 p-3 bg-gray-700 rounded border border-gray-600">
-                    <p className="text-gray-300 text-sm">
-                      {signal.rawMessage.length > 200 
-                        ? `${signal.rawMessage.substring(0, 200)}...` 
-                        : signal.rawMessage
-                      }
-                    </p>
+                
+                {s.metadata && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    {s.metadata.liquidity && (
+                      <div className="bg-gray-800 p-3 rounded">
+                        <div className="text-gray-400">Liquidity</div>
+                        <div className="font-semibold">
+                          ${(s.metadata.liquidity / 1000000).toFixed(2)}M
+                        </div>
+                      </div>
+                    )}
+                    {s.metadata.holderCount && (
+                      <div className="bg-gray-800 p-3 rounded">
+                        <div className="text-gray-400">Holders</div>
+                        <div className="font-semibold">
+                          {s.metadata.holderCount.toLocaleString()}
+                        </div>
+                      </div>
+                    )}
+                    {s.volume && (
+                      <div className="bg-gray-800 p-3 rounded">
+                        <div className="text-gray-400">Volume</div>
+                        <div className="font-semibold">
+                          ${(s.volume / 1000000).toFixed(2)}M
+                        </div>
+                      </div>
+                    )}
+                    {s.metadata.priceChange24h !== undefined && (
+                      <div className="bg-gray-800 p-3 rounded">
+                        <div className="text-gray-400">24h Change</div>
+                        <div className={`font-semibold ${
+                          s.metadata.priceChange24h > 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {s.metadata.priceChange24h > 0 ? '+' : ''}
+                          {s.metadata.priceChange24h.toFixed(2)}%
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
-
-                {/* Token Address */}
-                <div className="mt-3 p-2 bg-gray-700 rounded">
-                  <p className="text-gray-400 text-xs">Token Address:</p>
-                  <p className="text-gray-300 text-sm font-mono break-all">
-                    {signal.tokenAddress}
-                  </p>
+                
+                <div className="mt-4 flex items-center justify-between text-xs text-gray-400">
+                  <div>Source: {s.source}</div>
+                  <div>Token: {s.tokenAddress.slice(0, 8)}...{s.tokenAddress.slice(-8)}</div>
                 </div>
               </div>
-            ))
+              );
+            })
+          ) : (
+            <div className="bg-gray-900 border border-gray-800 rounded-lg p-12 text-center">
+              <div className="text-gray-400 text-lg mb-4">
+                {state.tradingActive ? 'Waiting for signals...' : 'Start trading to see live signals'}
+              </div>
+              <div className="text-gray-500 text-sm">
+                Signals will appear here as the trading bot discovers opportunities
+              </div>
+            </div>
           )}
         </div>
       </div>

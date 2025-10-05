@@ -39,7 +39,6 @@ const requiredVars = [
   'AWS_ACCESS_KEY_ID',
   'AWS_SECRET_ACCESS_KEY',
   'SOLANA_RPC_URL',
-  'JITO_API_KEY',
   'TELEGRAM_BOT_TOKEN',
   'DISCORD_WEBHOOK_URL'
 ];
@@ -51,7 +50,6 @@ const placeholderValues = [
   'your-app-password',
   'your-aws-access-key',
   'your-aws-secret-key',
-  'your-jito-api-key',
   'your-telegram-bot-token',
   'your-discord-webhook-url'
 ];
@@ -84,7 +82,6 @@ if (needsSetup.length === 0) {
   console.log('   • Google OAuth: https://console.cloud.google.com/');
   console.log('   • Gmail SMTP: Enable 2FA + App Password');
   console.log('   • AWS: https://console.aws.amazon.com/');
-  console.log('   • Jito: https://jito.wtf/');
   console.log('   • Telegram: Message @BotFather');
   console.log('   • Discord: Server Settings → Webhooks');
 }

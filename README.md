@@ -6,7 +6,7 @@ Advanced serverless trading bot for Solana tokens with intelligent signal proces
 
 - **Multi-Source Signal Processing**: Telegram, Discord, and Solana indexer integration
 - **Intelligent Risk Management**: Trailing stop-loss, position sizing, market regime awareness
-- **MEV Protection**: Jito integration with adaptive fee laddering
+- **MEV Protection**: Private mempool / stealth modes (no Jito)
 - **Paper Trading**: Risk-free strategy testing with realistic simulation
 - **Real-time Dashboard**: Live monitoring of trades, P&L, and risk metrics
 - **Advanced Authentication**: Email/password + Google OAuth with 2FA support

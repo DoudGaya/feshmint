@@ -119,7 +119,7 @@ export default function Home() {
               </div>
               <h3 className="text-2xl font-bold text-white mb-4">MEV Protection</h3>
               <p className="text-gray-300 leading-relaxed">
-                Jito integration with adaptive fee laddering to protect against MEV attacks and ensure optimal execution in competitive markets.
+                Adaptive fee strategies and private routing to protect against MEV attacks and ensure optimal execution in competitive markets.
               </p>
             </div>
 

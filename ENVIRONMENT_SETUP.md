@@ -7,8 +7,7 @@
 2. **Gmail SMTP** - For email notifications
 
 ### 🔶 **MEDIUM PRIORITY** (For trading features)
-3. **Jito API** - For MEV protection
-4. **Telegram Bot** - For trading signals
+3. **Telegram Bot** - For trading signals
 
 ### 🔵 **LOW PRIORITY** (For advanced features)
 5. **AWS S3** - For logging and file storage
@@ -52,21 +51,7 @@ SMTP_PASS="your-16-char-app-password"
 
 ---
 
-## ⚡ **STEP 3: Jito MEV Protection** (MEDIUM PRIORITY)
-
-### Quick Setup:
-1. **Visit**: https://jito.wtf/
-2. **Sign up** for API access
-3. **Get API key** from dashboard
-
-### Update your `.env.local`:
-```bash
-JITO_API_KEY="your-jito-api-key-here"
-```
-
----
-
-## 🤖 **STEP 4: Telegram Bot** (MEDIUM PRIORITY)
+## 🤖 **STEP 3: Telegram Bot** (MEDIUM PRIORITY)
 
 ### Quick Setup:
 1. **Open Telegram** and message `@BotFather`

@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { 
-  Shield, 
   Key, 
   Eye, 
   EyeOff, 
@@ -12,11 +11,11 @@ import {
   AlertCircle,
   CheckCircle,
   Settings as SettingsIcon,
-  DollarSign,
   TrendingUp,
   Zap,
   Bell
 } from 'lucide-react';
+import SignalSourceConfiguration from '@/components/dashboard/signal-sources';
 
 interface UserSettings {
   emailNotifications: boolean;
@@ -25,7 +24,6 @@ interface UserSettings {
   dashboardTheme: 'dark' | 'light';
   timezone: string;
   hasSolanaRpcUrl: boolean;
-  hasJitoApiKey: boolean;
   hasTradingWalletPrivateKey: boolean;
   hasTelegramBotToken: boolean;
   hasDiscordWebhookUrl: boolean;
@@ -44,7 +42,6 @@ interface TradingSettings {
 
 interface FormData {
   solanaRpcUrl: string;
-  jitoApiKey: string;
   tradingWalletPrivateKey: string;
   telegramBotToken: string;
   discordWebhookUrl: string;
@@ -57,6 +54,7 @@ interface FormData {
 
 export default function SettingsPage() {
   const { data: session } = useSession();
+  const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [tradingSettings, setTradingSettings] = useState<TradingSettings>({
     maxDailyRisk: 5,
@@ -70,7 +68,6 @@ export default function SettingsPage() {
   });
   const [formData, setFormData] = useState<FormData>({
     solanaRpcUrl: '',
-    jitoApiKey: '',
     tradingWalletPrivateKey: '',
     telegramBotToken: '',
     discordWebhookUrl: '',
@@ -83,7 +80,6 @@ export default function SettingsPage() {
   
   const [showSecrets, setShowSecrets] = useState({
     solanaRpcUrl: false,
-    jitoApiKey: false,
     tradingWalletPrivateKey: false,
     telegramBotToken: false,
     discordWebhookUrl: false,
@@ -155,7 +151,6 @@ export default function SettingsPage() {
         setFormData(prev => ({
           ...prev,
           solanaRpcUrl: '',
-          jitoApiKey: '',
           tradingWalletPrivateKey: '',
           telegramBotToken: '',
           discordWebhookUrl: '',
@@ -237,8 +232,313 @@ export default function SettingsPage() {
           <SettingsIcon className="h-8 w-8 text-emerald-400" />
           <div>
             <h1 className="text-2xl font-bold text-white">Settings</h1>
-            <p className="text-emerald-300">Configure your trading bot settings and API keys</p>
+            <p className="text-emerald-300">Configure your trading bot settings, API keys, and signal sources</p>
           </div>
+        </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="bg-gray-900/60 backdrop-blur-sm rounded-xl border border-emerald-800/30">
+        <div className="flex border-b border-gray-700/50">
+          <button
+            onClick={() => setActiveTab('general')}
+            className={`flex items-center space-x-2 px-6 py-4 font-medium transition-colors ${
+              activeTab === 'general'
+                ? 'text-emerald-400 border-b-2 border-emerald-400'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <SettingsIcon className="h-5 w-5" />
+            <span>General</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('trading')}
+            className={`flex items-center space-x-2 px-6 py-4 font-medium transition-colors ${
+              activeTab === 'trading'
+                ? 'text-emerald-400 border-b-2 border-emerald-400'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <TrendingUp className="h-5 w-5" />
+            <span>Trading</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('signals')}
+            className={`flex items-center space-x-2 px-6 py-4 font-medium transition-colors ${
+              activeTab === 'signals'
+                ? 'text-emerald-400 border-b-2 border-emerald-400'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Zap className="h-5 w-5" />
+            <span>Signal Sources</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('security')}
+            className={`flex items-center space-x-2 px-6 py-4 font-medium transition-colors ${
+              activeTab === 'security'
+                ? 'text-emerald-400 border-b-2 border-emerald-400'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Key className="h-5 w-5" />
+            <span>API Keys</span>
+          </button>
+        </div>
+
+        <div className="p-6">
+          {/* Signal Sources Tab */}
+          {activeTab === 'signals' && (
+            <SignalSourceConfiguration />
+          )}
+
+          {/* Trading Settings Tab */}
+          {activeTab === 'trading' && (
+            <div>
+              <div className="flex items-center space-x-2 mb-6">
+                <TrendingUp className="h-6 w-6 text-emerald-400" />
+                <h2 className="text-xl font-semibold text-white">Trading Settings</h2>
+              </div>
+
+              <form onSubmit={handleTradingSettingsSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-emerald-300 mb-2">
+                      Max Daily Risk (%)
+                    </label>
+                    <input
+                      type="number"
+                      value={tradingSettings.maxDailyRisk}
+                      onChange={(e) => handleTradingChange('maxDailyRisk', parseFloat(e.target.value))}
+                      className="w-full px-3 py-2 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-emerald-300 mb-2">
+                      Max Position Size (%)
+                    </label>
+                    <input
+                      type="number"
+                      value={tradingSettings.maxPositionSize}
+                      onChange={(e) => handleTradingChange('maxPositionSize', parseFloat(e.target.value))}
+                      className="w-full px-3 py-2 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-emerald-300 mb-2">
+                      Stop Loss (%)
+                    </label>
+                    <input
+                      type="number"
+                      value={tradingSettings.stopLoss}
+                      onChange={(e) => handleTradingChange('stopLoss', parseFloat(e.target.value))}
+                      className="w-full px-3 py-2 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-emerald-300 mb-2">
+                      Take Profit (%)
+                    </label>
+                    <input
+                      type="number"
+                      value={tradingSettings.takeProfit}
+                      onChange={(e) => handleTradingChange('takeProfit', parseFloat(e.target.value))}
+                      className="w-full px-3 py-2 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={savingTrading}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg flex items-center space-x-2 disabled:opacity-50"
+                  >
+                    {savingTrading ? (
+                      <RefreshCw className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Save className="h-5 w-5" />
+                    )}
+                    <span>{savingTrading ? 'Saving...' : 'Save Trading Settings'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* General Settings Tab */}
+          {activeTab === 'general' && (
+            <div>
+              <div className="flex items-center space-x-2 mb-6">
+                <Bell className="h-6 w-6 text-emerald-400" />
+                <h2 className="text-xl font-semibold text-white">General Settings</h2>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-emerald-300 mb-2">
+                      Dashboard Theme
+                    </label>
+                    <select
+                      value={formData.dashboardTheme}
+                      onChange={(e) => handleInputChange('dashboardTheme', e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="dark">Dark</option>
+                      <option value="light">Light</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-emerald-300 mb-2">
+                      Timezone
+                    </label>
+                    <select
+                      value={formData.timezone}
+                      onChange={(e) => handleInputChange('timezone', e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="UTC">UTC</option>
+                      <option value="America/New_York">Eastern Time</option>
+                      <option value="America/Chicago">Central Time</option>
+                      <option value="America/Denver">Mountain Time</option>
+                      <option value="America/Los_Angeles">Pacific Time</option>
+                      <option value="Europe/London">London Time</option>
+                      <option value="Europe/Paris">Paris Time</option>
+                      <option value="Asia/Tokyo">Tokyo Time</option>
+                      <option value="Asia/Shanghai">Shanghai Time</option>
+                      <option value="Asia/Kolkata">India Time</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg flex items-center space-x-2 disabled:opacity-50"
+                  >
+                    {saving ? (
+                      <RefreshCw className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Save className="h-5 w-5" />
+                    )}
+                    <span>{saving ? 'Saving...' : 'Save Settings'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* API Keys Tab */}
+          {activeTab === 'security' && (
+            <div>
+              <div className="flex items-center space-x-2 mb-6">
+                <Key className="h-6 w-6 text-emerald-400" />
+                <h2 className="text-xl font-semibold text-white">API Keys & Security</h2>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 gap-6">
+                  {/* Solana RPC URL */}
+                  <div>
+                    <label className="block text-sm font-medium text-emerald-300 mb-2">
+                      Solana RPC URL
+                      {settings?.hasSolanaRpcUrl && (
+                        <span className="ml-2 inline-flex items-center px-2 py-1 rounded text-xs bg-green-900/50 text-green-300">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Configured
+                        </span>
+                      )}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showSecrets.solanaRpcUrl ? 'text' : 'password'}
+                        value={formData.solanaRpcUrl}
+                        onChange={(e) => handleInputChange('solanaRpcUrl', e.target.value)}
+                        placeholder={settings?.hasSolanaRpcUrl ? 'Enter new URL to update' : 'Enter your Solana RPC URL'}
+                        className="w-full px-3 py-2 pr-10 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => toggleSecret('solanaRpcUrl')}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showSecrets.solanaRpcUrl ? (
+                          <EyeOff className="h-5 w-5 text-gray-400" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  
+
+                  {/* Trading Wallet Private Key */}
+                  <div>
+                    <label className="block text-sm font-medium text-emerald-300 mb-2">
+                      Trading Wallet Private Key
+                      {settings?.hasTradingWalletPrivateKey && (
+                        <span className="ml-2 inline-flex items-center px-2 py-1 rounded text-xs bg-green-900/50 text-green-300">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Configured
+                        </span>
+                      )}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showSecrets.tradingWalletPrivateKey ? 'text' : 'password'}
+                        value={formData.tradingWalletPrivateKey}
+                        onChange={(e) => handleInputChange('tradingWalletPrivateKey', e.target.value)}
+                        placeholder={settings?.hasTradingWalletPrivateKey ? 'Enter new key to update' : 'Enter your wallet private key'}
+                        className="w-full px-3 py-2 pr-10 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => toggleSecret('tradingWalletPrivateKey')}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showSecrets.tradingWalletPrivateKey ? (
+                          <EyeOff className="h-5 w-5 text-gray-400" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg flex items-center space-x-2 disabled:opacity-50"
+                  >
+                    {saving ? (
+                      <RefreshCw className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Save className="h-5 w-5" />
+                    )}
+                    <span>{saving ? 'Saving...' : 'Save API Keys'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
         </div>
       </div>
 
@@ -263,386 +563,6 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
-
-      {/* Trading Settings */}
-      <div className="bg-gray-900/60 backdrop-blur-sm rounded-xl border border-emerald-800/30 p-6">
-        <div className="flex items-center space-x-2 mb-6">
-          <TrendingUp className="h-6 w-6 text-emerald-400" />
-          <h2 className="text-xl font-semibold text-white">Trading Settings</h2>
-        </div>
-
-        <form onSubmit={handleTradingSettingsSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-emerald-300 mb-2">
-                Max Daily Risk (%)
-              </label>
-              <input
-                type="number"
-                value={tradingSettings.maxDailyRisk}
-                onChange={(e) => handleTradingChange('maxDailyRisk', parseFloat(e.target.value))}
-                className="w-full px-3 py-2 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                min="0"
-                max="100"
-                step="0.1"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-emerald-300 mb-2">
-                Max Position Size (%)
-              </label>
-              <input
-                type="number"
-                value={tradingSettings.maxPositionSize}
-                onChange={(e) => handleTradingChange('maxPositionSize', parseFloat(e.target.value))}
-                className="w-full px-3 py-2 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                min="0"
-                max="100"
-                step="0.1"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-emerald-300 mb-2">
-                Stop Loss (%)
-              </label>
-              <input
-                type="number"
-                value={tradingSettings.stopLoss}
-                onChange={(e) => handleTradingChange('stopLoss', parseFloat(e.target.value))}
-                className="w-full px-3 py-2 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                min="0"
-                max="100"
-                step="0.1"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-emerald-300 mb-2">
-                Take Profit (%)
-              </label>
-              <input
-                type="number"
-                value={tradingSettings.takeProfit}
-                onChange={(e) => handleTradingChange('takeProfit', parseFloat(e.target.value))}
-                className="w-full px-3 py-2 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                min="0"
-                max="1000"
-                step="0.1"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-emerald-300 mb-2">
-                Slippage Tolerance (%)
-              </label>
-              <input
-                type="number"
-                value={tradingSettings.slippageTolerance}
-                onChange={(e) => handleTradingChange('slippageTolerance', parseFloat(e.target.value))}
-                className="w-full px-3 py-2 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                min="0"
-                max="10"
-                step="0.1"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-emerald-300 mb-2">
-                Max Positions
-              </label>
-              <input
-                type="number"
-                value={tradingSettings.maxPositions}
-                onChange={(e) => handleTradingChange('maxPositions', parseInt(e.target.value))}
-                className="w-full px-3 py-2 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                min="1"
-                max="20"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="tradeEnabled"
-                checked={tradingSettings.tradeEnabled}
-                onChange={(e) => handleTradingChange('tradeEnabled', e.target.checked)}
-                className="rounded bg-gray-800 border-emerald-700 text-emerald-600 focus:ring-emerald-500"
-              />
-              <label htmlFor="tradeEnabled" className="ml-2 text-sm text-emerald-300">
-                Enable Trading
-              </label>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={savingTrading}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg flex items-center space-x-2 disabled:opacity-50"
-          >
-            {savingTrading ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            <span>{savingTrading ? 'Saving...' : 'Save Trading Settings'}</span>
-          </button>
-        </form>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* API Keys Section */}
-        <div className="bg-gray-900/60 backdrop-blur-sm rounded-xl border border-emerald-800/30 p-6">
-          <div className="flex items-center space-x-2 mb-6">
-            <Key className="h-6 w-6 text-blue-400" />
-            <h2 className="text-xl font-semibold text-white">API Keys & Credentials</h2>
-          </div>
-
-          <div className="grid grid-cols-1 gap-6">
-            {/* Solana RPC URL */}
-            <div>
-              <label className="block text-sm font-medium text-emerald-300 mb-2">
-                Solana RPC URL
-                <span className="text-xs text-gray-400 ml-2">
-                  {settings?.hasSolanaRpcUrl ? '(Currently set)' : '(Not set)'}
-                </span>
-              </label>
-              <div className="relative">
-                <input
-                  type={showSecrets.solanaRpcUrl ? 'text' : 'password'}
-                  value={formData.solanaRpcUrl}
-                  onChange={(e) => handleInputChange('solanaRpcUrl', e.target.value)}
-                  placeholder="https://api.mainnet-beta.solana.com"
-                  className="w-full px-4 py-3 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => toggleSecret('solanaRpcUrl')}
-                  className="absolute right-3 top-3 text-gray-400 hover:text-emerald-400"
-                >
-                  {showSecrets.solanaRpcUrl ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Jito API Key */}
-            <div>
-              <label className="block text-sm font-medium text-emerald-300 mb-2">
-                Jito API Key
-                <span className="text-xs text-gray-400 ml-2">
-                  {settings?.hasJitoApiKey ? '(Currently set)' : '(Not set)'}
-                </span>
-              </label>
-              <div className="relative">
-                <input
-                  type={showSecrets.jitoApiKey ? 'text' : 'password'}
-                  value={formData.jitoApiKey}
-                  onChange={(e) => handleInputChange('jitoApiKey', e.target.value)}
-                  placeholder="Enter your Jito API key"
-                  className="w-full px-4 py-3 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => toggleSecret('jitoApiKey')}
-                  className="absolute right-3 top-3 text-gray-400 hover:text-emerald-400"
-                >
-                  {showSecrets.jitoApiKey ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Trading Wallet Private Key */}
-            <div>
-              <label className="block text-sm font-medium text-emerald-300 mb-2">
-                Trading Wallet Private Key
-                <span className="text-xs text-gray-400 ml-2">
-                  {settings?.hasTradingWalletPrivateKey ? '(Currently set)' : '(Not set)'}
-                </span>
-              </label>
-              <div className="relative">
-                <input
-                  type={showSecrets.tradingWalletPrivateKey ? 'text' : 'password'}
-                  value={formData.tradingWalletPrivateKey}
-                  onChange={(e) => handleInputChange('tradingWalletPrivateKey', e.target.value)}
-                  placeholder="64-character hex private key"
-                  className="w-full px-4 py-3 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => toggleSecret('tradingWalletPrivateKey')}
-                  className="absolute right-3 top-3 text-gray-400 hover:text-emerald-400"
-                >
-                  {showSecrets.tradingWalletPrivateKey ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
-              </div>
-              <p className="text-xs text-red-400 mt-1">
-                ⚠️ Never share your private key. It&apos;s encrypted and stored securely.
-              </p>
-            </div>
-
-            {/* Telegram Bot Token */}
-            <div>
-              <label className="block text-sm font-medium text-emerald-300 mb-2">
-                Telegram Bot Token
-                <span className="text-xs text-gray-400 ml-2">
-                  {settings?.hasTelegramBotToken ? '(Currently set)' : '(Not set)'}
-                </span>
-              </label>
-              <div className="relative">
-                <input
-                  type={showSecrets.telegramBotToken ? 'text' : 'password'}
-                  value={formData.telegramBotToken}
-                  onChange={(e) => handleInputChange('telegramBotToken', e.target.value)}
-                  placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
-                  className="w-full px-4 py-3 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => toggleSecret('telegramBotToken')}
-                  className="absolute right-3 top-3 text-gray-400 hover:text-emerald-400"
-                >
-                  {showSecrets.telegramBotToken ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Discord Webhook URL */}
-            <div>
-              <label className="block text-sm font-medium text-emerald-300 mb-2">
-                Discord Webhook URL
-                <span className="text-xs text-gray-400 ml-2">
-                  {settings?.hasDiscordWebhookUrl ? '(Currently set)' : '(Not set)'}
-                </span>
-              </label>
-              <div className="relative">
-                <input
-                  type={showSecrets.discordWebhookUrl ? 'text' : 'password'}
-                  value={formData.discordWebhookUrl}
-                  onChange={(e) => handleInputChange('discordWebhookUrl', e.target.value)}
-                  placeholder="https://discord.com/api/webhooks/..."
-                  className="w-full px-4 py-3 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => toggleSecret('discordWebhookUrl')}
-                  className="absolute right-3 top-3 text-gray-400 hover:text-emerald-400"
-                >
-                  {showSecrets.discordWebhookUrl ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Notification Settings */}
-        <div className="bg-gray-900/60 backdrop-blur-sm rounded-xl border border-emerald-800/30 p-6">
-          <div className="flex items-center space-x-2 mb-6">
-            <Bell className="h-6 w-6 text-yellow-400" />
-            <h2 className="text-xl font-semibold text-white">Notification Settings</h2>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-white font-medium">Email Notifications</h3>
-                <p className="text-gray-400 text-sm">Receive trade alerts and updates via email</p>
-              </div>
-              <input
-                type="checkbox"
-                checked={formData.emailNotifications}
-                onChange={(e) => handleInputChange('emailNotifications', e.target.checked)}
-                className="rounded bg-gray-800 border-emerald-700 text-emerald-600 focus:ring-emerald-500"
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-white font-medium">Telegram Notifications</h3>
-                <p className="text-gray-400 text-sm">Receive real-time alerts on Telegram</p>
-              </div>
-              <input
-                type="checkbox"
-                checked={formData.telegramNotifications}
-                onChange={(e) => handleInputChange('telegramNotifications', e.target.checked)}
-                className="rounded bg-gray-800 border-emerald-700 text-emerald-600 focus:ring-emerald-500"
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-white font-medium">Discord Notifications</h3>
-                <p className="text-gray-400 text-sm">Get notified on your Discord server</p>
-              </div>
-              <input
-                type="checkbox"
-                checked={formData.discordNotifications}
-                onChange={(e) => handleInputChange('discordNotifications', e.target.checked)}
-                className="rounded bg-gray-800 border-emerald-700 text-emerald-600 focus:ring-emerald-500"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* General Settings */}
-        <div className="bg-gray-900/60 backdrop-blur-sm rounded-xl border border-emerald-800/30 p-6">
-          <div className="flex items-center space-x-2 mb-6">
-            <Shield className="h-6 w-6 text-purple-400" />
-            <h2 className="text-xl font-semibold text-white">General Settings</h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-emerald-300 mb-2">
-                Dashboard Theme
-              </label>
-              <select
-                value={formData.dashboardTheme}
-                onChange={(e) => handleInputChange('dashboardTheme', e.target.value)}
-                className="w-full px-3 py-2 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-emerald-300 mb-2">
-                Timezone
-              </label>
-              <select
-                value={formData.timezone}
-                onChange={(e) => handleInputChange('timezone', e.target.value)}
-                className="w-full px-3 py-2 bg-gray-800/70 border border-emerald-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="UTC">UTC</option>
-                <option value="America/New_York">Eastern Time</option>
-                <option value="America/Chicago">Central Time</option>
-                <option value="America/Denver">Mountain Time</option>
-                <option value="America/Los_Angeles">Pacific Time</option>
-                <option value="Europe/London">London Time</option>
-                <option value="Europe/Paris">Paris Time</option>
-                <option value="Asia/Tokyo">Tokyo Time</option>
-                <option value="Asia/Shanghai">Shanghai Time</option>
-                <option value="Asia/Kolkata">India Time</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Save Button */}
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={saving}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg flex items-center space-x-2 disabled:opacity-50"
-          >
-            {saving ? (
-              <RefreshCw className="h-5 w-5 animate-spin" />
-            ) : (
-              <Save className="h-5 w-5" />
-            )}
-            <span>{saving ? 'Saving...' : 'Save Settings'}</span>
-          </button>
-        </div>
-      </form>
     </div>
   );
 }

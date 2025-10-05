@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
 import { 
   LayoutDashboard,
   TrendingUp,
@@ -14,7 +15,9 @@ import {
   Bell,
   Users,
   BookOpen,
-  LogOut
+  LogOut,
+  Menu,
+  X
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 
@@ -37,20 +40,35 @@ const sidebarItems: SidebarItem[] = [
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
-export default function DashboardSidebar() {
+interface DashboardSidebarProps {
+  isCollapsed?: boolean;
+  onToggle?: () => void;
+}
+
+export default function DashboardSidebar({ isCollapsed = false, onToggle }: DashboardSidebarProps) {
   const pathname = usePathname();
 
   return (
-    <div className="hidden md:flex h-screen md:w-64 md:flex-col">
+    <div className={`hidden md:flex h-screen ${isCollapsed ? 'md:w-16' : 'md:w-64'} md:flex-col transition-all duration-300 ease-in-out`}>
       <div className="flex flex-col flex-grow pt-5 bg-gray-900 overflow-y-auto">
-        {/* Logo */}
-        <div className="flex items-center flex-shrink-0 px-4">
-          <div className="w-8 h-8 bg-gradient-to-r from-emerald-400 to-blue-500 rounded-lg flex items-center justify-center mr-3">
-            <span className="text-white font-bold text-sm">FM</span>
+        {/* Logo and Toggle */}
+        <div className="flex items-center flex-shrink-0 px-4 justify-between">
+          <div className="flex items-center">
+            <div className="w-8 h-8 bg-gradient-to-r from-emerald-400 to-blue-500 rounded-lg flex items-center justify-center mr-3">
+              <span className="text-white font-bold text-sm">FM</span>
+            </div>
+            {!isCollapsed && (
+              <span className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-blue-500 bg-clip-text text-transparent">
+                Fresh Mint
+              </span>
+            )}
           </div>
-          <span className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-blue-500 bg-clip-text text-transparent">
-            Fresh Mint
-          </span>
+          <button
+            onClick={onToggle}
+            className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+          >
+            {isCollapsed ? <Menu className="h-5 w-5" /> : <X className="h-5 w-5" />}
+          </button>
         </div>
 
         {/* Navigation */}
@@ -69,17 +87,22 @@ export default function DashboardSidebar() {
                       ? 'bg-emerald-600 text-white'
                       : 'text-gray-300 hover:bg-gray-700 hover:text-white'
                   }`}
+                  title={isCollapsed ? item.name : undefined}
                 >
                   <Icon
-                    className={`mr-3 flex-shrink-0 h-5 w-5 ${
+                    className={`${isCollapsed ? 'mx-auto' : 'mr-3'} flex-shrink-0 h-5 w-5 ${
                       isActive ? 'text-white' : 'text-gray-400 group-hover:text-gray-300'
                     }`}
                   />
-                  <span className="flex-1">{item.name}</span>
-                  {item.badge && (
-                    <span className="ml-3 inline-block py-0.5 px-2 text-xs font-medium bg-emerald-500 text-white rounded-full">
-                      {item.badge}
-                    </span>
+                  {!isCollapsed && (
+                    <>
+                      <span className="flex-1">{item.name}</span>
+                      {item.badge && (
+                        <span className="ml-3 inline-block py-0.5 px-2 text-xs font-medium bg-emerald-500 text-white rounded-full">
+                          {item.badge}
+                        </span>
+                      )}
+                    </>
                   )}
                 </Link>
               );
@@ -88,36 +111,57 @@ export default function DashboardSidebar() {
 
           {/* User section */}
           <div className="flex-shrink-0 p-4 border-t border-gray-700">
-            <div className="flex items-center">
-              <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
-                <Users className="h-4 w-4 text-gray-300" />
+            {!isCollapsed ? (
+              <>
+                <div className="flex items-center">
+                  <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
+                    <Users className="h-4 w-4 text-gray-300" />
+                  </div>
+                  <div className="ml-3 flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate">
+                      Trading Bot
+                    </p>
+                    <p className="text-xs text-gray-400 truncate">
+                      Live Trading
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="mt-4 space-y-2">
+                  <Link
+                    href="/documentation"
+                    className="flex items-center px-2 py-1 text-sm text-gray-400 hover:text-white transition-colors"
+                  >
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Documentation
+                  </Link>
+                  <button
+                    onClick={() => signOut()}
+                    className="flex items-center px-2 py-1 text-sm text-gray-400 hover:text-white transition-colors w-full"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <Link
+                  href="/documentation"
+                  className="flex items-center justify-center p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-md transition-colors"
+                  title="Documentation"
+                >
+                  <BookOpen className="h-5 w-5" />
+                </Link>
+                <button
+                  onClick={() => signOut()}
+                  className="flex items-center justify-center p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-md transition-colors w-full"
+                  title="Sign Out"
+                >
+                  <LogOut className="h-5 w-5" />
+                </button>
               </div>
-              <div className="ml-3 flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">
-                  Trading Bot
-                </p>
-                <p className="text-xs text-gray-400 truncate">
-                  Live Trading
-                </p>
-              </div>
-            </div>
-            
-            <div className="mt-4 space-y-2">
-              <Link
-                href="/documentation"
-                className="flex items-center px-2 py-1 text-sm text-gray-400 hover:text-white transition-colors"
-              >
-                <BookOpen className="h-4 w-4 mr-2" />
-                Documentation
-              </Link>
-              <button
-                onClick={() => signOut()}
-                className="flex items-center px-2 py-1 text-sm text-gray-400 hover:text-white transition-colors w-full"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
-              </button>
-            </div>
+            )}
           </div>
         </div>
       </div>

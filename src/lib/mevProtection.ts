@@ -1,12 +1,10 @@
 import { Connection, Transaction, VersionedTransaction } from '@solana/web3.js';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 
 interface MEVProtectionConfig {
-  jitoApiKey?: string;
   maxSlippage: number;
   maxPriorityFee: number;
   usePrivateMempool: boolean;
-  bundleTransactions: boolean;
   delayRandomization: number; // milliseconds
 }
 
@@ -15,7 +13,7 @@ interface ProtectedTransaction {
   signature?: string;
   bundleId?: string;
   protection: {
-    method: 'JITO_BUNDLE' | 'PRIVATE_MEMPOOL' | 'DELAYED_EXECUTION' | 'STEALTH_MODE';
+    method: 'PRIVATE_MEMPOOL' | 'DELAYED_EXECUTION' | 'STEALTH_MODE';
     applied: boolean;
     cost: number; // in SOL
   };
@@ -23,13 +21,10 @@ interface ProtectedTransaction {
 
 class MEVProtectionService {
   private connection: Connection;
-  private prisma: PrismaClient;
-  private jitoApiKey?: string;
+  // Reuse shared prisma client
 
-  constructor(rpcUrl: string, jitoApiKey?: string) {
+  constructor(rpcUrl: string) {
     this.connection = new Connection(rpcUrl);
-    this.prisma = new PrismaClient();
-    this.jitoApiKey = jitoApiKey;
   }
 
   async protectTransaction(
@@ -38,7 +33,7 @@ class MEVProtectionService {
     userId: string
   ): Promise<ProtectedTransaction> {
     try {
-      let protectionMethod: 'JITO_BUNDLE' | 'PRIVATE_MEMPOOL' | 'DELAYED_EXECUTION' | 'STEALTH_MODE';
+  let protectionMethod: 'PRIVATE_MEMPOOL' | 'DELAYED_EXECUTION' | 'STEALTH_MODE';
       let protectionCost = 0;
       let bundleId: string | undefined;
 
@@ -46,13 +41,7 @@ class MEVProtectionService {
       const mevRisk = await this.analyzeMEVRisk(transaction);
       
       // Choose protection method based on risk and configuration
-      if (mevRisk.score > 0.7 && config.jitoApiKey && config.bundleTransactions) {
-        // High risk: Use Jito bundle protection
-        const bundleResult = await this.protectWithJitoBundle(transaction, config);
-        protectionMethod = 'JITO_BUNDLE';
-        protectionCost = bundleResult.cost;
-        bundleId = bundleResult.bundleId;
-      } else if (mevRisk.score > 0.5 && config.usePrivateMempool) {
+      if (mevRisk.score > 0.5 && config.usePrivateMempool) {
         // Medium risk: Use private mempool if available
         await this.protectWithPrivateMempool(transaction, config);
         protectionMethod = 'PRIVATE_MEMPOOL';
@@ -156,35 +145,7 @@ class MEVProtectionService {
     };
   }
 
-  private async protectWithJitoBundle(
-    _transaction: Transaction | VersionedTransaction,
-    _config: MEVProtectionConfig
-  ): Promise<{ bundleId: string; cost: number }> {
-    if (!this.jitoApiKey) {
-      throw new Error('Jito API key not provided');
-    }
-
-    try {
-      // Simulate Jito bundle submission for now
-      // In production, this would integrate with Jito's actual API
-      const bundleId = this.generateUUID();
-      
-      // Add a delay to simulate bundle processing
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Jito typically charges 0.001-0.01 SOL per bundle
-      const cost = 0.005; // 0.005 SOL average
-
-      return {
-        bundleId,
-        cost
-      };
-
-    } catch (error) {
-      console.error('Jito bundle protection failed:', error);
-      throw error;
-    }
-  }
+  // Removed Jito bundle implementation
 
   private async protectWithPrivateMempool(
     _transaction: Transaction | VersionedTransaction,
@@ -256,7 +217,7 @@ class MEVProtectionService {
     transactionType: string;
   }): Promise<void> {
     try {
-      await this.prisma.trade.updateMany({
+      await prisma.trade.updateMany({
         where: {
           userId,
           status: 'PENDING'
@@ -287,7 +248,7 @@ class MEVProtectionService {
     methodBreakdown: Record<string, number>;
   }> {
     try {
-      const trades = await this.prisma.trade.findMany({
+      const trades = await prisma.trade.findMany({
         where: {
           userId
         }
@@ -300,14 +261,14 @@ class MEVProtectionService {
         methodBreakdown: {} as Record<string, number>
       };
 
-      const protectedTrades = trades.filter(trade => {
+      const protectedTrades = trades.filter((trade) => {
         const metadata = trade.metadata as Record<string, unknown>;
         return metadata?.mevProtection;
       });
 
       stats.totalProtected = protectedTrades.length;
 
-      protectedTrades.forEach(trade => {
+      protectedTrades.forEach((trade) => {
         const mevData = (trade.metadata as Record<string, unknown>)?.mevProtection as Record<string, unknown>;
         if (mevData) {
           stats.totalCost += (mevData.cost as number) || 0;
@@ -317,7 +278,7 @@ class MEVProtectionService {
         }
       });
 
-      const successfulTrades = protectedTrades.filter(t => t.status === 'EXECUTED').length;
+      const successfulTrades = protectedTrades.filter((t) => t.status === 'EXECUTED').length;
       stats.successRate = protectedTrades.length > 0 ? (successfulTrades / protectedTrades.length) * 100 : 0;
 
       return stats;

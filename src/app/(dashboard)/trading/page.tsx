@@ -1,378 +1,414 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Play, 
-  Pause, 
-  Settings, 
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  Target,
-  Shield,
-  Zap
-} from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { useRealTimeTrading } from '@/contexts/real-time-trading-context';
 
-interface TradingSettings {
-  isActive: boolean;
-  tradingMode: 'LIVE' | 'PAPER';
-  maxPositionSize: number;
-  portfolioCap: number;
-  dailyDrawdownLimit: number;
-  winRateThreshold: number;
-  minLiquidity: number;
-  minBuyerConfirmation: number;
-  maxDevWalletControl: number;
-  maxPriceDump: number;
-  trailingStopLoss: number;
+interface TokenChart {
+  symbol: string;
+  address: string;
+  price: number;
+  change24h: number;
+  volume24h: number;
+  marketCap: number;
 }
 
 export default function TradingPage() {
-  const [settings, setSettings] = useState<TradingSettings | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
+  const { state, actions } = useRealTimeTrading();
+  const [selectedToken, setSelectedToken] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'chart' | 'signals' | 'trades'>('chart');
+  const startupRef = useRef(false);
 
+  // Initialize real-time data connections
   useEffect(() => {
-    fetchTradingSettings();
-  }, []);
-
-  const fetchTradingSettings = async () => {
-    try {
-      const response = await fetch('/api/trading/settings');
-      if (response.ok) {
-        const data = await response.json();
-        setSettings(data);
-      }
-    } catch (error) {
-      console.error('Error fetching trading settings:', error);
-    } finally {
-      setLoading(false);
+    if (!startupRef.current) {
+      startupRef.current = true;
+      // Start trading connection to ensure we get real-time data
+      actions.startTrading().catch(console.error);
     }
-  };
-
-  const toggleTrading = async () => {
-    if (!settings) return;
     
-    setUpdating(true);
-    try {
-      const response = await fetch('/api/trading/toggle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: !settings.isActive }),
-      });
-
-      if (response.ok) {
-        setSettings({ ...settings, isActive: !settings.isActive });
+    return () => {
+      // Clean up connections on unmount
+      if (startupRef.current) {
+        actions.stopTrading().catch(console.error);
       }
-    } catch (error) {
-      console.error('Error toggling trading:', error);
-    } finally {
-      setUpdating(false);
-    }
-  };
+    };
+  }, []); // No dependencies needed with ref pattern
 
-  const updateSetting = (key: keyof TradingSettings, value: string | number | boolean) => {
-    if (settings) {
-      setSettings({ ...settings, [key]: value });
-    }
-  };
+  // Use real-time data from context
+  const signals = state.currentSignals;
+  const recentTrades = state.recentTrades;
+  const isActive = state.tradingActive;
+  const stats = state.portfolioStats;
+  const isLoading = state.connectionStatus === 'connecting';
 
-  const saveSettings = async () => {
-    if (!settings) return;
-    
-    setUpdating(true);
-    try {
-      const response = await fetch('/api/trading/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      });
+  // Get recent signals for token selection
+  const recentSignals = Array.isArray(signals) ? signals.slice(0, 20) : [];
+  const recentTradesArray = Array.isArray(recentTrades) ? recentTrades : [];
 
-      if (response.ok) {
-        // Show success message
-      }
-    } catch (error) {
-      console.error('Error saving settings:', error);
-    } finally {
-      setUpdating(false);
-    }
-  };
+  // Popular tokens for chart display
+  const popularTokens: TokenChart[] = [
+    { 
+      symbol: 'SOL', 
+      address: 'So11111111111111111111111111111111111111112', 
+      price: 98.45, 
+      change24h: 5.23, 
+      volume24h: 2500000,
+      marketCap: 45000000000
+    },
+    { 
+      symbol: 'BONK', 
+      address: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', 
+      price: 0.000012, 
+      change24h: -2.14, 
+      volume24h: 850000,
+      marketCap: 750000000
+    },
+    { 
+      symbol: 'WIF', 
+      address: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', 
+      price: 2.87, 
+      change24h: 8.91, 
+      volume24h: 1200000,
+      marketCap: 2800000000
+    },
+    { 
+      symbol: 'PEPE', 
+      address: '6GCL6pT1j1JoC4k4rH9PV9nF1F8F5VJ9L2kV8N3mH8eM', 
+      price: 0.0000087, 
+      change24h: 12.45, 
+      volume24h: 950000,
+      marketCap: 3600000000
+    },
+  ];
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-emerald-500"></div>
-      </div>
-    );
-  }
-
-  if (!settings) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-400">Failed to load trading settings</p>
-      </div>
-    );
-  }
+  const currentToken = selectedToken || popularTokens[0].address;
+  const currentTokenData = popularTokens.find(t => t.address === currentToken) || popularTokens[0];
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-900/50 to-blue-900/50 rounded-xl border border-emerald-800/30 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-white">Trading Control</h1>
-            <p className="text-emerald-300 mt-2">
-              Manage your automated trading settings and monitor performance
-            </p>
-          </div>
-          <div className="flex items-center space-x-4">
-            <div className={`flex items-center space-x-2 ${
-              settings.isActive ? 'text-emerald-400' : 'text-gray-400'
-            }`}>
-              {settings.isActive ? (
-                <CheckCircle className="h-5 w-5" />
-              ) : (
-                <Pause className="h-5 w-5" />
-              )}
-              <span className="font-medium">
-                {settings.isActive ? 'Active' : 'Paused'}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Trading Controls */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Controls */}
-        <div className="lg:col-span-2 bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <h2 className="text-xl font-semibold text-white mb-6">Trading Controls</h2>
-          
-          <div className="space-y-6">
-            {/* Start/Stop Trading */}
-            <div className="flex items-center justify-between p-4 bg-gray-800 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <div className={`w-3 h-3 rounded-full ${
-                  settings.isActive ? 'bg-emerald-500 animate-pulse' : 'bg-gray-500'
-                }`}></div>
-                <div>
-                  <h3 className="text-white font-medium">Automated Trading</h3>
-                  <p className="text-gray-400 text-sm">
-                    {settings.isActive ? 'Bot is actively trading' : 'Trading is paused'}
-                  </p>
-                </div>
+      <div className="border-b border-gray-800 bg-black/95 backdrop-blur-sm sticky top-0 z-50">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-6">
+              <h1 className="text-xl font-bold text-white">Fresh Mint</h1>
+              <div className="flex space-x-1">
+                {['chart', 'signals', 'trades'].map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setViewMode(mode as 'chart' | 'signals' | 'trades')}
+                    className={`px-3 py-1.5 rounded-lg capitalize transition-all text-sm ${
+                      viewMode === mode
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                    }`}
+                  >
+                    {mode}
+                  </button>
+                ))}
               </div>
-              <button
-                onClick={toggleTrading}
-                disabled={updating}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                  settings.isActive
-                    ? 'bg-red-600 hover:bg-red-700 text-white'
-                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                } disabled:opacity-50`}
-              >
-                {settings.isActive ? (
-                  <>
-                    <Pause className="h-4 w-4" />
-                    <span>Stop Trading</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-4 w-4" />
-                    <span>Start Trading</span>
-                  </>
-                )}
-              </button>
             </div>
-
-            {/* Trading Mode */}
-            <div className="p-4 bg-gray-800 rounded-lg">
-              <h3 className="text-white font-medium mb-3">Trading Mode</h3>
-              <div className="flex space-x-4">
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    checked={settings.tradingMode === 'PAPER'}
-                    onChange={() => updateSetting('tradingMode', 'PAPER')}
-                    className="text-emerald-600 focus:ring-emerald-500"
-                  />
-                  <span className="text-gray-300">Paper Trading</span>
-                </label>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    checked={settings.tradingMode === 'LIVE'}
-                    onChange={() => updateSetting('tradingMode', 'LIVE')}
-                    className="text-emerald-600 focus:ring-emerald-500"
-                  />
-                  <span className="text-gray-300">Live Trading</span>
-                </label>
+            
+            <div className="flex items-center space-x-4">
+              {/* Trading Status */}
+              <div className="flex items-center space-x-2">
+                <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
+                <span className="text-xs font-medium">
+                  {isActive ? 'Live Trading' : 'Trading Stopped'}
+                </span>
               </div>
-              {settings.tradingMode === 'LIVE' && (
-                <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                  <div className="flex items-center space-x-2">
-                    <AlertTriangle className="h-4 w-4 text-yellow-400" />
-                    <span className="text-yellow-400 text-sm font-medium">
-                      Live trading uses real funds. Ensure all settings are correct.
+              
+              {/* Stats */}
+              {stats && (
+                <div className="flex items-center space-x-4 text-xs">
+                  <div className="flex flex-col items-center">
+                    <span className="text-gray-400">P&L</span>
+                    <span className={`font-semibold ${
+                      (typeof stats === 'object' && stats && 'totalPnL' in stats ? (stats.totalPnL as number || 0) : 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      ${typeof stats === 'object' && stats && 'totalPnL' in stats ? (stats.totalPnL as number || 0).toFixed(2) : '0.00'}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-gray-400">Trades</span>
+                    <span className="font-semibold">{typeof stats === 'object' && stats && 'totalTrades' in stats ? (stats.totalTrades as number || 0) : 0}</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-gray-400">Win Rate</span>
+                    <span className="font-semibold text-blue-400">
+                      {typeof stats === 'object' && stats && 'winRate' in stats ? (stats.winRate as number || 0).toFixed(1) : '0'}%
                     </span>
                   </div>
                 </div>
               )}
+              
+              {/* Trading Control */}
+              <button
+                onClick={isActive ? actions.stopTrading : actions.startTrading}
+                disabled={isLoading}
+                className={`px-4 py-2 rounded-lg font-medium transition-all disabled:opacity-50 text-sm ${
+                  isActive
+                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
+              >
+                {isLoading ? 'Loading...' : isActive ? 'Stop Trading' : 'Start Trading'}
+              </button>
             </div>
+          </div>
+        </div>
+      </div>
 
-            {/* Position Sizing */}
-            <div className="p-4 bg-gray-800 rounded-lg">
-              <h3 className="text-white font-medium mb-3">Position Sizing</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">
-                    Max Position Size ($)
-                  </label>
-                  <input
-                    type="number"
-                    value={settings.maxPositionSize}
-                    onChange={(e) => updateSetting('maxPositionSize', Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">
-                    Portfolio Cap ($)
-                  </label>
-                  <input
-                    type="number"
-                    value={settings.portfolioCap}
-                    onChange={(e) => updateSetting('portfolioCap', Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
+      <div className="flex h-[calc(100vh-120px)]">
+        {/* Token Selector Sidebar */}
+        <div className="w-72 bg-gray-900 border-r border-gray-800 p-4">
+          <div className="mb-4">
+            <h3 className="text-base font-semibold mb-3">Markets</h3>
+            <div className="space-y-1">
+              {popularTokens.map((token) => (
+                <button
+                  key={token.address}
+                  onClick={() => setSelectedToken(token.address)}
+                  className={`w-full text-left p-3 rounded-lg transition-all ${
+                    currentToken === token.address
+                      ? 'bg-blue-600/20 border border-blue-600 text-white'
+                      : 'bg-gray-800 hover:bg-gray-700 border border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="font-medium text-sm">{token.symbol}</div>
+                    <div className={`text-xs font-medium ${
+                      token.change24h > 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {token.change24h > 0 ? '+' : ''}{token.change24h.toFixed(2)}%
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="text-gray-300">${token.price.toFixed(6)}</div>
+                    <div className="text-gray-400">
+                      Vol: ${(token.volume24h / 1000000).toFixed(1)}M
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    MCap: ${(token.marketCap / 1000000000).toFixed(1)}B
+                  </div>
+                </button>
+              ))}
             </div>
-
-            {/* Risk Management */}
-            <div className="p-4 bg-gray-800 rounded-lg">
-              <h3 className="text-white font-medium mb-3">Risk Management</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">
-                    Daily Drawdown Limit (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={settings.dailyDrawdownLimit}
-                    onChange={(e) => updateSetting('dailyDrawdownLimit', Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
-                  />
+          </div>
+          
+          {/* Recent Signals */}
+          <div>
+            <h4 className="text-sm font-semibold mb-2 flex items-center">
+              Recent Signals
+              <div className={`ml-2 w-2 h-2 rounded-full ${
+                recentSignals.length > 0 ? 'bg-green-400 animate-pulse' : 'bg-gray-400'
+              }`} />
+            </h4>
+            <div className="space-y-1 max-h-60 overflow-y-auto">
+              {recentSignals.length > 0 ? recentSignals.map((signal) => (
+                <div
+                  key={signal.id}
+                  className="p-2 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-700 transition-all"
+                  onClick={() => setSelectedToken(signal.tokenAddress)}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-medium text-sm">{signal.symbol}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      signal.action === 'BUY' 
+                        ? 'bg-green-900 text-green-300' 
+                        : 'bg-red-900 text-red-300'
+                    }`}>
+                      {signal.action}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <span>{Math.round(signal.confidence * 100)}% confidence</span>
+                    <span>{new Date(signal.timestamp).toLocaleTimeString()}</span>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">
-                    Win Rate Threshold (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={settings.winRateThreshold}
-                    onChange={(e) => updateSetting('winRateThreshold', Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
-                  />
+              )) : (
+                <div className="text-gray-400 text-xs text-center py-4">
+                  No signals yet
                 </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">
-                    Trailing Stop Loss (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={settings.trailingStopLoss}
-                    onChange={(e) => updateSetting('trailingStopLoss', Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
+              )}
             </div>
-
-            {/* Save Button */}
-            <button
-              onClick={saveSettings}
-              disabled={updating}
-              className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
-            >
-              {updating ? 'Saving...' : 'Save Settings'}
-            </button>
           </div>
         </div>
 
-        {/* Status Panel */}
-        <div className="space-y-6">
-          {/* Trading Status */}
-          <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Trading Status</h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Shield className="h-4 w-4 text-blue-400" />
-                  <span className="text-gray-300">Risk Management</span>
+        {/* Main Content Area */}
+        <div className="flex-1 bg-black">
+          {viewMode === 'chart' && (
+            <div className="h-full flex flex-col">
+              <div className="p-6 border-b border-gray-800">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <h3 className="text-2xl font-bold">{currentTokenData.symbol}</h3>
+                    <div className="text-lg font-semibold">${currentTokenData.price.toFixed(6)}</div>
+                    <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      currentTokenData.change24h > 0 
+                        ? 'bg-green-900/50 text-green-400' 
+                        : 'bg-red-900/50 text-red-400'
+                    }`}>
+                      {currentTokenData.change24h > 0 ? '+' : ''}{currentTokenData.change24h.toFixed(2)}%
+                    </div>
+                  </div>
+                  <div className="flex space-x-4 text-sm text-gray-400">
+                    <div>Vol: ${(currentTokenData.volume24h / 1000000).toFixed(1)}M</div>
+                    <div>MCap: ${(currentTokenData.marketCap / 1000000000).toFixed(1)}B</div>
+                  </div>
                 </div>
-                <span className="text-emerald-400 text-sm">Active</span>
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Zap className="h-4 w-4 text-yellow-400" />
-                  <span className="text-gray-300">MEV Protection</span>
+              <div className="flex-1 p-6">
+                <div className="w-full h-full bg-gray-900 rounded-lg overflow-hidden">
+                  <iframe
+                    src={`https://dexscreener.com/solana/${currentToken}?embed=1&theme=dark&trades=0&info=0`}
+                    className="w-full h-full"
+                    style={{ border: 'none' }}
+                    title="Token Chart"
+                  />
                 </div>
-                <span className="text-emerald-400 text-sm">Enabled</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Target className="h-4 w-4 text-purple-400" />
-                  <span className="text-gray-300">Signal Sources</span>
-                </div>
-                <span className="text-emerald-400 text-sm">3 Active</span>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Performance Metrics */}
-          <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Performance Today</h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">Trades Executed</span>
-                <span className="text-white font-medium">12</span>
+          {viewMode === 'signals' && (
+            <div className="h-full flex flex-col">
+              <div className="p-6 border-b border-gray-800">
+                <h3 className="text-2xl font-bold">Live Trading Signals</h3>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">Win Rate</span>
-                <span className="text-emerald-400 font-medium">75%</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">P&L</span>
-                <span className="text-emerald-400 font-medium">+$247.50</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">Max Drawdown</span>
-                <span className="text-yellow-400 font-medium">-2.3%</span>
+              <div className="flex-1 p-6 overflow-y-auto">
+                <div className="space-y-4">
+                  {recentSignals.length > 0 ? recentSignals.map((signal) => (
+                    <div key={signal.id} className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-4">
+                          <span className="text-2xl font-bold">{signal.symbol}</span>
+                          <span className={`px-4 py-2 rounded-full text-sm font-medium ${
+                            signal.action === 'BUY' 
+                              ? 'bg-green-900/50 text-green-300 border border-green-600' 
+                              : 'bg-red-900/50 text-red-300 border border-red-600'
+                          }`}>
+                            {signal.action}
+                          </span>
+                          <div className="flex items-center space-x-2">
+                            <div className="text-gray-400">Confidence:</div>
+                            <div className="font-semibold text-blue-400">
+                              {Math.round(signal.confidence * 100)}%
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xl font-semibold">${signal.price.toFixed(6)}</div>
+                          <div className="text-gray-400 text-sm">
+                            {new Date(signal.timestamp).toLocaleTimeString()}
+                          </div>
+                        </div>
+                      </div>
+                      {signal.metadata && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          {signal.metadata.marketCap && (
+                            <div className="bg-gray-800 p-3 rounded">
+                              <div className="text-gray-400">Market Cap</div>
+                              <div className="font-semibold">
+                                ${(signal.metadata.marketCap / 1000000).toFixed(2)}M
+                              </div>
+                            </div>
+                          )}
+                          {signal.metadata.liquidity && (
+                            <div className="bg-gray-800 p-3 rounded">
+                              <div className="text-gray-400">Liquidity</div>
+                              <div className="font-semibold">
+                                ${(signal.metadata.liquidity / 1000000).toFixed(2)}M
+                              </div>
+                            </div>
+                          )}
+                          {signal.metadata.holderCount && (
+                            <div className="bg-gray-800 p-3 rounded">
+                              <div className="text-gray-400">Holders</div>
+                              <div className="font-semibold">
+                                {signal.metadata.holderCount.toLocaleString()}
+                              </div>
+                            </div>
+                          )}
+                          {signal.metadata.priceChange24h !== undefined && (
+                            <div className="bg-gray-800 p-3 rounded">
+                              <div className="text-gray-400">24h Change</div>
+                              <div className={`font-semibold ${
+                                signal.metadata.priceChange24h > 0 ? 'text-green-400' : 'text-red-400'
+                              }`}>
+                                {signal.metadata.priceChange24h > 0 ? '+' : ''}
+                                {signal.metadata.priceChange24h.toFixed(2)}%
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )) : (
+                    <div className="bg-gray-900 border border-gray-800 rounded-lg p-12 text-center">
+                      <div className="text-gray-400 text-lg">
+                        {isActive ? 'Waiting for signals...' : 'Start trading to see live signals'}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Quick Actions */}
-          <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Quick Actions</h3>
-            <div className="space-y-3">
-              <button className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors">
-                View Live Trades
-              </button>
-              <button className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors">
-                Check Signals
-              </button>
-              <button className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors">
-                Risk Report
-              </button>
+          {viewMode === 'trades' && (
+            <div className="h-full flex flex-col">
+              <div className="p-6 border-b border-gray-800">
+                <h3 className="text-2xl font-bold">Trading History</h3>
+              </div>
+              <div className="flex-1 p-6 overflow-y-auto">
+                <div className="space-y-4">
+                  {recentTradesArray.length > 0 ? (
+                    recentTradesArray.map((trade) => (
+                      <div key={trade.id} className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <span className="text-xl font-bold">{typeof trade === 'object' && trade && 'symbol' in trade ? String(trade.symbol) : 'Unknown'}</span>
+                            <span className={`px-4 py-2 rounded-full text-sm font-medium ${
+                              (typeof trade === 'object' && trade && 'action' in trade && trade.action === 'BUY') 
+                                ? 'bg-green-900/50 text-green-300 border border-green-600' 
+                                : 'bg-red-900/50 text-red-300 border border-red-600'
+                            }`}>
+                              {typeof trade === 'object' && trade && 'action' in trade ? String(trade.action) : 'UNKNOWN'}
+                            </span>
+                            <div className="text-gray-400">
+                              Amount: ${typeof trade === 'object' && trade && 'amount' in trade ? (trade.amount as number || 0).toFixed(2) : '0.00'}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className={`text-xl font-semibold ${
+                              (typeof trade === 'object' && trade && 'pnl' in trade && typeof trade.pnl === 'number' && trade.pnl > 0) ? 'text-green-400' : 
+                              (typeof trade === 'object' && trade && 'pnl' in trade && typeof trade.pnl === 'number' && trade.pnl < 0) ? 'text-red-400' : 'text-gray-400'
+                            }`}>
+                              {typeof trade === 'object' && trade && 'pnl' in trade && typeof trade.pnl === 'number' ? `$${trade.pnl.toFixed(2)}` : 'Pending'}
+                            </div>
+                            <div className="text-gray-400 text-sm">
+                              {typeof trade === 'object' && trade && 'timestamp' in trade ? 
+                                new Date(typeof trade.timestamp === 'string' ? trade.timestamp : Number(trade.timestamp)).toLocaleTimeString() : 
+                                'Unknown'
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="bg-gray-900 border border-gray-800 rounded-lg p-12 text-center">
+                      <div className="text-gray-400 text-lg">
+                        No trades yet. Start trading to see activity.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

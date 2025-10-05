@@ -1,5 +1,5 @@
 import { Connection, PublicKey } from '@solana/web3.js';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { hasSubscriptionAccess } from './subscription';
 
 interface SignalData {
@@ -28,11 +28,11 @@ interface ProcessedSignal {
 }
 
 class SignalProcessor {
-  private prisma: PrismaClient;
+  private prisma = prisma;
   private connection: Connection;
 
   constructor() {
-    this.prisma = new PrismaClient();
+  // Reuse shared prisma
     this.connection = new Connection(process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com');
   }
 

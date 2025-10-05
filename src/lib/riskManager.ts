@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { SignalData } from './signalProcessor';
 
 interface RiskParameters {
@@ -34,10 +34,10 @@ interface PortfolioRisk {
 }
 
 class RiskManager {
-  private prisma: PrismaClient;
+  private prisma = prisma;
 
   constructor() {
-    this.prisma = new PrismaClient();
+  // Reuse shared prisma
   }
 
   async assessTradeRisk(
